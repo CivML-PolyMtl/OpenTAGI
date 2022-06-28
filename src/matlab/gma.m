@@ -7,5 +7,10 @@ classdef gma
         function C_x_yz = Cxyz(my, mz, Cxy, Cxz)
             C_x_yz = Cxy .* mz + Cxz .* my;
         end
+        function C_ab_cd = Cabcd(ma, mb, mc, md, Cac, Cad, Cbc, Cbd)
+            C_ab_cd = Cac .* Cbd + Cad .* Cbc...
+                + Cac .* mb .* md + Cad .* mb .* mc...
+                + Cbc .* ma .* md + Cbd .* ma .* mc;
+        end
     end
 end

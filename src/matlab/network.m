@@ -1719,6 +1719,8 @@ classdef network
             numDataPerBatch = net.repBatchSize * net.batchSize;
             zl  = zeros(numObs, net.ny, net.dtype);
             Szl = zeros(numObs, net.ny, net.dtype);
+            B   = cast(net.batchSize, net.dtype);
+            rB  = cast(net.repBatchSize, net.dtype);
             % Loop
             loop = 0;
             for i = 1 : numDataPerBatch : numObs
@@ -1744,7 +1746,7 @@ classdef network
                     yloop = reshape(y(idxBatch, :)', ...
                         [net.batchSize * net.nl, net.repBatchSize]);                  
                     [states, normStat, maxIdx] = tagi.feedForwardPass(net,...
-                        theta, normStat, states, maxIdx); 
+                        theta, normStat, states, maxIdx);
                     [deltaM, deltaS,deltaMx, deltaSx,...
                         ~, ~, sv] = tagi.hiddenStateBackwardPass(net, theta,...
                         normStat, states, yloop, [], [], maxIdx);
@@ -1759,16 +1761,24 @@ classdef network
                     [states, normStat, maxIdx] = tagi.feedForwardPass(net,...
                         theta, normStat, states, maxIdx); 
                     [~, ~, ma, Sa]   = tagi.extractStates(states);
+                    sv = net.sv;
+                end
+                if strcmp(net.noiseType, 'full') && ~net.trainMode
+                    [mla, mLa] = tagi.detachMeanVar(ma{end}, net.nl,...
+                        net.nLchol, B, rB);
+                    [Sla, SLa] = tagi.detachMeanVar(Sa{end}, net.nl,...
+                        net.nLchol, B, rB);
+                    [mLa_, SLa_, ~] = agvi.transform_chol_vec(mLa, SLa, net.gpu);
+                    zl(idxBatch, :) = tagi.attachMeanVar(mla, mLa_,...
+                        net.nl, net.nLchol, B, rB);
+                    Szl(idxBatch, :) = tagi.attachMeanVar(Sla, SLa_,...
+                        net.nl, net.nLchol, B, rB);
+                else
                     zl(idxBatch, :)  = gather(reshape(ma{end}, ...
                         [net.ny, numDataPerBatch])');
                     Szl(idxBatch, :) = gather(reshape(Sa{end}, ...
                         [net.ny, numDataPerBatch])');
-                    sv = net.sv;
-                end 
-                zl(idxBatch, :)  = gather(reshape(ma{end}, ...
-                    [net.ny, numDataPerBatch])');
-                Szl(idxBatch, :) = gather(reshape(Sa{end}, ...
-                    [net.ny, numDataPerBatch])');
+                end
             end
         end
         function [theta, normStat, zl, Szl, sv] = regressionFullCov(net,...
