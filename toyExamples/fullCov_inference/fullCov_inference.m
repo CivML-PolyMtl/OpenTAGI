@@ -55,9 +55,9 @@ net.actFunIdx      = [0         4       0     ];
 
 % Gain factors
 mw_gain = 1;
-Sw_gain = 0.25;
+Sw_gain = 0.75;
 mb_gain = 1;
-Sb_gain = 0.25;
+Sb_gain = 0.75;
 % Parameter initialization
 net.initParamType  = 'He';
 numLayers = length(net.layer);
@@ -66,7 +66,11 @@ net.gainSw = Sw_gain.*ones(1, numLayers-1);
 net.gainMb = mb_gain*ones(1, numLayers-1);
 net.gainSb = Sb_gain*ones(1, numLayers-1);
 
-% seed = randi(1000);
+attemps = 0;
+% while attemps < 20
+
+start = true;
+% seed = randi(1e8);
 seed = 42;
 shuffle = true;
 
@@ -84,9 +88,12 @@ end
 % Train the  model
 
 % Values used to find the optimal number of epochs for training
+% if ~start
+%     best_LL = -inf;
+% end
 best_LL = -inf;
 patience = 0;
-patience_threshold = 1;
+patience_threshold = 3;
 
 % Train net
 net.trainMode = 1;
@@ -128,24 +135,37 @@ while ~stop
         fprintf('Warn! NaN values in oredicted variance\n');
     end
     
-    LL_train = mt.loglik(ytrain, mytrain(:,1), Sytrain(:,1));
-    if isnan(LL_train)
-        LL_train = -inf;
-    end
+%     LL_train = mt.loglik(ytrain, mytrain(:,1:net.nl), Sytrain(:,1:net.nl));
+%     if isnan(LL_train)
+%         LL_train = -inf;
+%     end
 
-    fprintf('Train L.L. : %d \n',LL_train)
-    fprintf('--------------\n')
+%     fprintf('Train L.L. : %d \n',LL_train)
+%     fprintf('--------------\n')
 
     % Validating
     [~, ~, myvalid, Syvalid] = network.regression(netT, theta, ...
     normStatT, statesT, maxIdxT, xvalid);
 
-    if netT.learnSv
-        [mv2a, ~, ~] = act.expFun(myvalid(:,2), Syvalid(:,2), net.gpu);
-        Syvalid(:,1) = Syvalid(:,1) +  mv2a;
+    mv2_test = zeros(size(myvalid(:,net.nl+1:end)));
+    Sv2_test = zeros(size(Syvalid(:,net.nl+1:end)));
+    
+    for i=1:size(myvalid,1)
+        ma = myvalid(i,:);
+        Sa = Syvalid(i,:);
+        [~, mLa] = tagi.detachMeanVar(ma, net.nl,...
+            net.nLchol, net.batchSize, net.repBatchSize);
+        [~, SLa] = tagi.detachMeanVar(Sa, net.nl,...
+            net.nLchol, net.batchSize, net.repBatchSize);
+        % transform the diagonal elements into positive domain
+        [mLa_, SLa_, ~] = agvi.transform_chol_vec(mLa, SLa, net.gpu);
+        % retrieve the variance parameters from the cholesky vectors
+        [mv2, Sv2] = agvi.chol_to_v2(mLa_, SLa_);
+        mv2_test(i,:) = mv2;
+        Sv2_test(i,:) = diag(Sv2);
     end
 
-    LL_val = mt.loglik(yvalid, myvalid(:,1), Syvalid(:,1));
+    LL_val = mt.loglik(yvalid, myvalid(:,1:net.nl), Syvalid(:,1:net.nl) + mv2_test(:,[1,3,6])); %[1,3,6] are the indices of the variance parameters
     if isnan(LL_val)
         LL_val = -inf;
     end
@@ -155,6 +175,7 @@ while ~stop
         best_LL = LL_val;
         best_theta = theta;
         best_epoch = epoch;
+        % best_seed = seed;
         patience = 0;
     else
         patience = patience + 1;
@@ -170,9 +191,11 @@ while ~stop
         stop = true;
     end
 end
+% attemps = attemps + 1;
+% end
 toc
 fprintf('************************************\n')
-
+% fprintf('Best seed: %d', best_seed)
 % ========================================================================
 % Predict
 [pred_mean, pred_var] = TAGI_predict(net, theta, x_test);
@@ -203,9 +226,9 @@ for i=1:net.nl
     figure;
     pl.regression(x_test, pred_mean(:,i), pred_var(:,i) + mv2_test(j,:), 'black', 'green', 1)
     hold on
-    scatter(xtrain, ytrain(:,i), 10, 'magenta', 'd', 'DisplayName','training data')
-    hold on
-    scatter(xvalid, yvalid(:,i), 10, 'blue', 'x', 'DisplayName','validation data')
+    scatter([xtrain;xvalid], [ytrain(:,i);yvalid(:,i)], 10, 'magenta', 'o', 'DisplayName','training data')
+%     hold on
+%     scatter(xvalid, yvalid(:,i), 10, 'blue', 'x', 'DisplayName','validation data')
 end
 % ========================================================================
 % Plot the predicted variances and covariances
