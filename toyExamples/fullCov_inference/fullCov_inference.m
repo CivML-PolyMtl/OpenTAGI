@@ -3,21 +3,19 @@
 % Description:  test observation error full covariance inference
 % Authors:      Luong-Ha Nguyen, James-A. Goulet & Ali Fakhri
 % Created:      June 28, 2022
-% Updated:      June 28, 2022
+% Updated:      July 7, 2022
 % Contact:      luongha.nguyen@gmail.com, james.goulet@polymtl.ca & afakhri@pm.me
 % Copyright (c) 2022 Luong-Ha Nguyen, James-A. Goulet & Ali Fakhri. All rights reserved. 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % ========================================================================
-% Load the data
-data = load('training_data_full_cov.mat');
-xtrain = data.x_tr;
-ytrain = data.y_tr;
-xvalid = data.x_val;
-yvalid = data.y_val;
-x_test = data.x_test;
-y_test = data.y_test;
-error_covs = data.error_covs_test;
+% Generate data
+seed = 420;
+a = -0.75; b = 0.75; % sampling interval
+n_samples = 2000;
+n_out = 3;
+[xtrain, ytrain, ~] = generate_data(a, b, n_samples, n_out, seed, false);
+[xtest, ytest, error_covs] = generate_data(a, b, n_samples, n_out, seed, true);
 
 % ========================================================================
 % Set NN attributes
@@ -50,25 +48,13 @@ net.noiseType = 'full';
 % Layer| 1: FC; 2:conv; 3: max pooling; 4: avg pooling; 5: layerNorm; 6: batchNorm 
 % Activation: 1:tanh; 2:sigm; 3:cdf; 4:relu; 5:softplus
 net.layer          = [1         1       1     ];
-net.nodes          = [net.nx    400     net.ny]; 
 net.actFunIdx      = [0         4       0     ];
 
-% Gain factors
-mw_gain = 1;
-% Sw_gain = 0.75;
-mb_gain = 1;
-% Sb_gain = 0.75;
 % Parameter initialization
 net.initParamType  = 'He';
 numLayers = length(net.layer);
-% net.gainMw = mw_gain.*ones(1, numLayers-1);
-% net.gainSw = Sw_gain.*ones(1, numLayers-1);
-% net.gainMb = mb_gain*ones(1, numLayers-1);
-% net.gainSb = Sb_gain*ones(1, numLayers-1);
 
-attempts = 0;
-best_LL = -inf;
-
+% grid search values
 gain_values = [0.01, 0.1, 0.5, 0.75, 1];
 hidden_nodes = [50, 100, 200, 400];
 gain_max = 1;
@@ -79,8 +65,10 @@ h_nodes_min = 50;
 config = {};
 grid_search = false;
 randomized_search = false;
-total_attempts = 1;
-seed = 42;
+total_attempts = 1; % change to value > 1 if doing gridsearch or randomized search
+attempts = 0;
+best_LL = -inf;
+
 while attempts < total_attempts
     %     seed = randi(1e8);
     if ~isempty(seed)
@@ -98,20 +86,18 @@ while attempts < total_attempts
     end
 
     if grid_search
-        mw_gain = 1;
-        mb_gain = 1;
+        mw_gain = randsample(gain_values,1);
+        mb_gain = randsample(gain_values,1);
         Sw_gain = randsample(gain_values,1);
         Sb_gain = randsample(gain_values,1);
         h_nodes = randsample(hidden_nodes,1);
     elseif randomized_search
-%         mw_gain = (gain_max-gain_min).*rand + gain_min;
-%         mb_gain = (gain_max-gain_min).*rand + gain_min;
-        mw_gain = 1;
-        mb_gain = 1;
+        mw_gain = (gain_max-gain_min).*rand + gain_min;
+        mb_gain = (gain_max-gain_min).*rand + gain_min;
         Sw_gain = (gain_max-gain_min).*rand + gain_min;
         Sb_gain = (gain_max-gain_min).*rand + gain_min;
         h_nodes = randi([h_nodes_min, h_nodes_max]);
-    else
+    else % use the default values
         mw_gain = 1;
         mb_gain = 1;
         Sw_gain = 0.75;
@@ -124,19 +110,16 @@ while attempts < total_attempts
     net.gainMb = mb_gain*ones(1, numLayers-1);
     net.gainSb = Sb_gain*ones(1, numLayers-1);
     net.nodes = [net.nx    h_nodes     net.ny]; 
-
+    
+    % save the config
     config.mw_gain = mw_gain;
     config.mb_gain = mb_gain;
     config.Sb_gain = Sb_gain;
     config.Sw_gain = Sw_gain;
     config.layers = net.nodes;
 
-
     % ========================================================================
     % Train the  model
-    
-    % Values used to find the optimal number of epochs for training
-    % best_LL = -inf;
     patience = 0;
     patience_threshold = 5;
     
@@ -159,7 +142,6 @@ while attempts < total_attempts
     epoch = 0;
     best_epoch = 0;
 %     tic
-%     config
     while ~stop
         fprintf('\nEpoch: %d \n==============\n', epoch)
         
@@ -236,11 +218,11 @@ end
 fprintf('************************************\n')
 % fprintf('\nBest seed: %d', best_seed)
 fprintf('\nBest LL_val: %d', best_LL)
-% best_config
+
 % ========================================================================
 % Predict
 [~, ~, pred_mean, pred_var] = network.regression(netT, best_theta, ...
-    normStatT, statesT, maxIdxT, x_test, []);
+    normStatT, statesT, maxIdxT, xtest, []);
 
 % Transform from the 'Cholesky space' to the 'variance space'
 mv2_test = zeros(size(pred_mean(:,net.nl+1:end)));
@@ -260,17 +242,19 @@ for i=1:size(pred_mean,1)
     mv2_test(i,:) = mv2;
     Sv2_test(i,:) = diag(Sv2);
 end
+
 % ========================================================================
 % Plot the predicted target variables
 var_indices = [1, 3, 6];
 for i=1:net.nl
     figure;
-    pl.regression(x_test, pred_mean(:,i), pred_var(:,i) + mv2_test(:,var_indices(i)), 'black', 'green', 1)
+    pl.regression(xtest, pred_mean(:,i), pred_var(:,i) + mv2_test(:,var_indices(i)), 'black', 'green', 1)
     hold on
     scatter([xtrain;xvalid], [ytrain(:,i);yvalid(:,i)], 10, 'magenta', 'o', 'DisplayName','training data')
-%     hold on
-%     scatter(xvalid, yvalid(:,i), 10, 'blue', 'x', 'DisplayName','validation data')
+    hold on 
+    plot(xtest, ytest, 'red', 'DisplayName','true')
 end
+
 % ========================================================================
 % Plot the predicted variances and covariances
 
@@ -288,9 +272,51 @@ for i=1:net.nLchol
         label = strcat('$\sigma_{',strcat(num2str(row_ind),num2str(col_ind)),'}$ true');
     end
     figure;
-    pl.regression(x_test, mv2_test(:,i), Sv2_test(:,i), 'black', 'green', 1)
+    pl.regression(xtest, mv2_test(:,i), Sv2_test(:,i), 'black', 'green', 1)
     hold on
-    plot(x_test, error_covs(:,row_ind,col_ind),'DisplayName',label)
+    plot(xtest, error_covs(:,row_ind,col_ind),'DisplayName',label)
 %     xlim([-0.75 0.75]) % limit the plot to the to the range of the training data
 end
 
+% ========================================================================
+% Function for generating data
+function [x_all, y_all, error_covs] = generate_data(a, b, n_samples, n_out, seed, test)
+    if ~isempty(seed)
+        rng(seed);
+    end
+
+    if test
+        x_all = linspace(a,b)';
+    else
+        x_all = (b - a) * rand(n_samples, 1) + a;
+    end
+
+    errors = zeros(size(x_all,1), n_out);
+    error_covs = zeros(size(x_all,1), n_out, n_out);
+
+    for i=1:size(x_all,1)
+        x = x_all(i);
+    
+        sigma1 = sqrt(0.1 * x + 0.25);
+        sigma2 = sqrt(0.5 * x^2 + 0.1);
+        sigma3 = sqrt(0.5 * (x + 1.5)^2);
+    
+        diag_std = diag([sigma1, sigma2, sigma3]);
+        rhos = [0.1, -0.3, -0.25];
+
+        corr_matrix = ones(n_out);
+        corr_matrix(logical(triu(corr_matrix,1))) = rhos;
+        corr_matrix(logical(triu(corr_matrix,1)')) = rhos;
+    
+        error_cov_matrix = diag_std * corr_matrix * diag_std;
+
+        error_covs(i,:,:) = error_cov_matrix;
+        errors(i,:) = mvnrnd(zeros(n_out,1), error_cov_matrix);
+    end
+
+    if test
+        y_all = (1 + x_all) .* sin(x_all * pi) .^ 3;
+    else
+        y_all = (1 + x_all) .* sin(x_all * pi) .^ 3 + errors;
+    end
+end
