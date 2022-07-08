@@ -10,7 +10,7 @@
 
 % ========================================================================
 % Load the data
-data = load('training_data_full_cov_case2.mat');
+data = load('training_data_full_cov.mat');
 xtrain = data.x_tr;
 ytrain = data.y_tr;
 xvalid = data.x_val;
@@ -67,7 +67,6 @@ numLayers = length(net.layer);
 % net.gainSb = Sb_gain*ones(1, numLayers-1);
 
 attempts = 0;
-total_attempts = 1;
 best_LL = -inf;
 
 gain_values = [0.01, 0.1, 0.5, 0.75, 1];
@@ -78,11 +77,12 @@ h_nodes_max = 500;
 h_nodes_min = 50;
 
 config = {};
-gridsearch = false;
-seed = [];
+grid_search = false;
+randomized_search = false;
+total_attempts = 1;
+seed = 42;
 while attempts < total_attempts
     %     seed = randi(1e8);
-    %     seed = 99793097;
     if ~isempty(seed)
         rng(seed);
         net.seed = seed;
@@ -97,13 +97,13 @@ while attempts < total_attempts
         config.rng = rng_;
     end
 
-    if gridsearch
+    if grid_search
         mw_gain = 1;
         mb_gain = 1;
         Sw_gain = randsample(gain_values,1);
         Sb_gain = randsample(gain_values,1);
         h_nodes = randsample(hidden_nodes,1);
-    else % randomized search
+    elseif randomized_search
 %         mw_gain = (gain_max-gain_min).*rand + gain_min;
 %         mb_gain = (gain_max-gain_min).*rand + gain_min;
         mw_gain = 1;
@@ -111,6 +111,12 @@ while attempts < total_attempts
         Sw_gain = (gain_max-gain_min).*rand + gain_min;
         Sb_gain = (gain_max-gain_min).*rand + gain_min;
         h_nodes = randi([h_nodes_min, h_nodes_max]);
+    else
+        mw_gain = 1;
+        mb_gain = 1;
+        Sw_gain = 0.75;
+        Sb_gain = 0.75;
+        h_nodes = 400;
     end
 
     net.gainMw = mw_gain.*ones(1, numLayers-1);
@@ -132,7 +138,7 @@ while attempts < total_attempts
     % Values used to find the optimal number of epochs for training
     % best_LL = -inf;
     patience = 0;
-    patience_threshold = 10;
+    patience_threshold = 5;
     
     % Train net
     net.trainMode = 1;
@@ -173,14 +179,6 @@ while attempts < total_attempts
         if any(isnan(Sytrain))
             fprintf('Warn! NaN values in oredicted variance\n');
         end
-        
-    %     LL_train = mt.loglik(ytrain, mytrain(:,1:net.nl), Sytrain(:,1:net.nl));
-    %     if isnan(LL_train)
-    %         LL_train = -inf;
-    %     end
-    
-    %     fprintf('Train L.L. : %d \n',LL_train)
-    %     fprintf('--------------\n')
     
         % Validating
         [~, ~, myvalid, Syvalid] = network.regression(netT, theta, ...
@@ -203,8 +201,9 @@ while attempts < total_attempts
             mv2_test(i,:) = mv2;
             Sv2_test(i,:) = diag(Sv2);
         end
-    
-        LL_val = mt.loglik(yvalid, myvalid(:,1:net.nl), Syvalid(:,1:net.nl) + mv2_test(:,[1,3,6])); %[1,3,6] are the indices of the variance parameters
+        
+        LL_val = mt.loglikfull(yvalid, myvalid(:,1:net.nl), Syvalid(:,1:net.nl), mv2_test);
+
         if isnan(LL_val)
             LL_val = -inf;
         end
