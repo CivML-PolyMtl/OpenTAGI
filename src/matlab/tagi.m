@@ -758,6 +758,26 @@
                         deltaSz = tagi.attachMeanVar(deltaSlz, deltaSv2z,...
                             net.nl, net.nv2, B, rB);
                     elseif strcmp(net.task, 'regression') ...
+                            && strcmp(net.noiseType, 'full')
+                        [mla, mLa] = tagi.detachMeanVar(ma{end}, net.nl,...
+                            net.nLchol, B, rB);
+                        [Sla, SLa] = tagi.detachMeanVar(Sa{end}, net.nl,...
+                            net.nLchol, B, rB);
+                        % transform the diagonal elements into positive domain
+                        [mLa_, SLa_, CLa_] = agvi.transform_chol_vec(mLa, SLa, net.gpu);
+                        % retrieve post parameters for l and z
+                        [deltaMlz, deltaSlz, mLa_post_, SLa_post_] = agvi.full_noiseUpdate4regression(mla, Sla, mLa_, SLa_, y);
+                        % transform L back to the real domain
+                        [mLa_post, SLa_post] = agvi.full_noiseBackwardUpdate(mLa, SLa, mLa_, SLa_, CLa_, mLa_post_, SLa_post_, net.gpu);
+
+                        deltaMLz = mLa_post - mLa;
+                        deltaSLz = SLa_post - SLa;
+
+                        deltaMz = tagi.attachMeanVar(deltaMlz, deltaMLz,...
+                            net.nl, net.nLchol, B, rB);
+                        deltaSz = tagi.attachMeanVar(deltaSlz, deltaSLz,...
+                            net.nl, net.nLchol, B, rB);
+                    elseif strcmp(net.task, 'regression') ...
                             && strcmp(net.noiseType, 'homo')
                         mv2a = net.sv(1);
                         Sv2a = net.sv(2);

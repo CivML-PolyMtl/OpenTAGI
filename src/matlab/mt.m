@@ -26,6 +26,13 @@ classdef mt
                 LL = mean(-d/2*log(2*pi) - 0.5*log(prod(Vpred, 2)) - sum((0.5*(y-ypred).^2)./Vpred, 2)); 
             end
         end
+        function LL = loglikfull(y, my, Sy, mv2)
+            LL = 0;
+            for i = 1:size(y,1)
+                Sv = agvi.v2_to_Sv(mv2(i,:)');
+                LL = LL + log(mvnpdf(y(i,:), my(i,:), diag(Sy(i,:)) + Sv));
+            end
+        end
         function weight     = probFromloglik(loglik)
             maxlogpdf       = max(loglik);
             w_1             = bsxfun(@minus,loglik,maxlogpdf);
