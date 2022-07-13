@@ -70,12 +70,14 @@ classdef pl
         end
         function regression(x, y, Sy, c1, c2, f)
             [xpl, idx] = sort(x);
-            plot(xpl, y(idx), 'color', c1)
+            plot(xpl, y(idx), 'color', c1, 'LineWidth', 1, 'DisplayName', '$\dot{\mu}_{z}$')
             hold on
-            patch([xpl' fliplr(xpl')],[y(idx)' + f*sqrt(Sy(idx)'),  fliplr(y(idx)' - f*sqrt(Sy(idx)'))], c2, 'EdgeColor','none','FaceColor', c2,'FaceAlpha', 0.2)
-            xlabel('x', 'Interpreter','latex')
-            ylabel('y', 'Interpreter','latex')            
-            h = legend('$E[y]$', ['$E[y]\pm$', num2str(f), '$\sigma$']);
+            patch([xpl' fliplr(xpl')],[y(idx)' + f*sqrt(Sy(idx)'),  fliplr(y(idx)' - f*sqrt(Sy(idx)'))],...
+                c2, 'EdgeColor','none','FaceColor', c2,'FaceAlpha', 0.2, 'DisplayName', strcat('$\dot{\mu}_{z}\pm$', num2str(f), '$\sigma$'))
+            % xlabel('x', 'Interpreter','latex')
+            % ylabel('y', 'Interpreter','latex')            
+%             h = legend('$\dot{\mu}_{z}$', ['$\dot{\mu}_{z}\pm$', num2str(f), '$\sigma$']);
+            h = legend('Location','southwest');
             set(h,'Interpreter','latex');
         end
         function inversedNet(y, x, Sx, c1, c2, f)
