@@ -32,6 +32,7 @@ classdef indices
                 netInfos.imgH        = net.imgH;
             end
             netInfos.layer         = net.layer;
+            netInfos.actFunIdx     = net.actFunIdx; 
             netInfos.nodes         = net.nodes;
             netInfos.sv            = net.sv;
             netInfos.batchSize     = net.batchSize;
@@ -207,6 +208,9 @@ classdef indices
             end
             if ~isfield(net, 'scheduledSv')
                 net.scheduledSv = 0;
+            end
+            if ~isfield(net, 'imperfect_obs')
+                net.imperfect_obs = false;
             end
             
             % Derivative

@@ -717,13 +717,28 @@
                     if isempty(Sy)
                         R = net.sv.^2;
                     else
-                        R = net.sv.^2 + Sy;
+                        R = net.sv.^2; %+ Sy;
                     end                   
                     if isempty(udIdx)
                         Szv = Sa{end} + R;
-                        [deltaMz,...
-                         deltaSz] = tagi.fowardHiddenStateUpdate(ma{lHL+1},...
-                         Szv, J{lHL+1}.*Sz{lHL+1}, y, net.gpu);
+                        if net.imperfect_obs
+                            deltaMz = y - ma{lHL+1};
+                            deltaSz = Sy - Szv;
+                            % Innovation vector
+                            [deltaMz, deltaSz] = tagi.inovationVector(Szv,...
+                                deltaMz, deltaSz, net.gpu);
+                            % RTS update
+                            deltaMz = Sa{end} .* deltaMz;
+                            deltaSz = Sa{end} .* deltaSz .* Sa{end};
+                            
+%                             [temp_deltaMz,...
+%                              temp_deltaSz] = tagi.fowardHiddenStateUpdate(ma{lHL+1},...
+%                              Szv, J{lHL+1}.*Sz{lHL+1}, y, net.gpu);
+                        else
+                            [deltaMz,...
+                             deltaSz] = tagi.fowardHiddenStateUpdate(ma{lHL+1},...
+                             Szv, J{lHL+1}.*Sz{lHL+1}, y, net.gpu);
+                        end
                     else
                         mzf = ma{end}(udIdx);
                         Szf = J{lHL+1}(udIdx) .* Sz{lHL+1}(udIdx);
@@ -751,8 +766,8 @@
                         
                         [deltaMlz, deltaSlz, deltaMv2z,...
                             deltaSv2z] = tagi.noiseUpdate4regression(Slz,...
-                            mla, Sla, Jl, Jv2, mv2a, Sv2a, Cv2a, y, net.sv,...
-                            net.gpu);
+                            mla, Sla, Jl, Jv2, mv2a, Sv2a, Cv2a, y, Sy, net.sv,...
+                            net);
                         deltaMz = tagi.attachMeanVar(deltaMlz, deltaMv2z,...
                             net.nl, net.nv2, B, rB);
                         deltaSz = tagi.attachMeanVar(deltaSlz, deltaSv2z,...
@@ -1344,7 +1359,7 @@
                         [deltaMlz, deltaSlz, deltaMv2z,...
                             deltaSv2z] = tagi.noiseUpdate4regression(Slz,...
                             mla, Sla, Jl, Jv2, mv2a, Sv2a, Cv2a, y, net.sv,...
-                            net.gpu);
+                            net);
                         deltaMz = tagi.attachMeanVar(deltaMlz, deltaMv2z,...
                             net.nl, net.nv2, B, rB);
                         deltaSz = tagi.attachMeanVar(deltaSlz, deltaSv2z,...
@@ -3820,15 +3835,32 @@
         end
         function [deltaMlz, deltaSlz, deltaMv2z,...
                 deltaSv2z] = noiseUpdate4regression(Slz, mla, Sla, J, Jv2,...
-                mv2a, Sv2a, Cv2a, y, sv, gpu)
+                mv2a, Sv2a, Cv2a, y, Sy, sv, net)
             Cyz = J .* Slz ;
             Syf = Sla + mv2a + sv.^2;
             
-            [deltaMlz, deltaSlz] = tagi.fowardHiddenStateUpdate(mla, Syf,...
-                Cyz, y, gpu);
-            [deltaMv, deltaSv] = tagi.fowardHiddenStateUpdate(mla, Syf,...
-                mv2a, y, gpu);
-            
+            if net.imperfect_obs
+                deltaMz = y - mla;
+                deltaSz = Sy - Syf;
+                % Updating the hidden node(s) used for estimating y
+                [deltaMlz, deltaSlz] = tagi.inovationVector(Syf,...
+                    deltaMz, deltaSz, net.gpu);
+                % RTS update
+                deltaMlz = Sla .* deltaMlz;
+                deltaSlz = Sla .* deltaSlz .* Sla;
+                % Updating the hidden node(s) used for estimating the noise
+                [deltaMv, deltaSv] = tagi.inovationVector(mv2a,...
+                    deltaMz, deltaSz, net.gpu);
+                % RTS update
+                deltaMv = mv2a .* deltaMv;
+                deltaSv = mv2a .* deltaSv .* mv2a;
+            else
+                [deltaMlz, deltaSlz] = tagi.fowardHiddenStateUpdate(mla, Syf,...
+                    Cyz, y, net.gpu);
+                [deltaMv, deltaSv] = tagi.fowardHiddenStateUpdate(mla, Syf,...
+                    mv2a, y, net.gpu);
+            end
+
             mvUd = deltaMv;
             SvUd = mv2a + deltaSv;
             
@@ -3836,7 +3868,7 @@
             yv2  = mvUd.^2 + SvUd;
             Sv2f = 2 * SvUd.^2 + 4 * (mvUd.^2) .* SvUd;   
             [deltaMv2z, deltaSv2z] = tagi.noiseBackwardUpdate(mv2a,...
-                3 * Sv2a + 2 * mv2a.^2, Jv2 .* Cv2a, yv2, Sv2f, gpu); 
+                3 * Sv2a + 2 * mv2a.^2, Jv2 .* Cv2a, yv2, Sv2f, net.gpu); 
         end
         function [deltaMlz, deltaSlz, deltaMv2z,...
                 deltaSv2z] = homoNoiseUpdate4regression(Slz, mla, Sla, J,...

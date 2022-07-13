@@ -1713,7 +1713,7 @@ classdef network
         
         % Regression 
         function [theta, normStat, zl, Szl, sv] = regression(net, theta,...
-                normStat, states, maxIdx, x, y)
+                normStat, states, maxIdx, x, y, Sy)
             % Initialization
             numObs = size(x, 1);
             numDataPerBatch = net.repBatchSize * net.batchSize;
@@ -1742,12 +1742,18 @@ classdef network
                 if net.trainMode                 
                     % Observation
                     yloop = reshape(y(idxBatch, :)', ...
-                        [net.batchSize * net.nl, net.repBatchSize]);                  
+                        [net.batchSize * net.nl, net.repBatchSize]);
+                    if net.imperfect_obs
+                        Syloop = reshape(Sy(idxBatch, :)', ...
+                            [net.batchSize * net.nl, net.repBatchSize]);
+                    else
+                        Syloop = [];
+                    end
                     [states, normStat, maxIdx] = tagi.feedForwardPass(net,...
                         theta, normStat, states, maxIdx); 
                     [deltaM, deltaS,deltaMx, deltaSx,...
                         ~, ~, sv] = tagi.hiddenStateBackwardPass(net, theta,...
-                        normStat, states, yloop, [], [], maxIdx);
+                        normStat, states, yloop, Syloop, [], maxIdx);
                     net.sv = sv;
                     dtheta = tagi.parameterBackwardPass(net, theta, normStat,...
                         states, deltaM, deltaS, deltaMx, deltaSx);
