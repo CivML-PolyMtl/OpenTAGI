@@ -162,8 +162,13 @@
                 
                 % Activation
                 if actFunIdx(j)~=0
-                    [ma{j}, Sa{j}, J{j}] = act.meanVar(mz{j}, mz{j}, Sz{j},...
+                    if net.split_v2_act && j == numLayers
+                        [ma{j}(1:net.nl), Sa{j}(1:net.nl), J{j}(1:net.nl)] = act.meanVar(mz{j}(1:net.nl), mz{j}(1:net.nl), Sz{j}(1:net.nl),...
                         actFunIdx(j), actBound(j), B, rB, net.gpu);
+                    else    
+                        [ma{j}, Sa{j}, J{j}] = act.meanVar(mz{j}, mz{j}, Sz{j},...
+                        actFunIdx(j), actBound(j), B, rB, net.gpu);
+                    end
                 else
                     ma{j} = mz{j};
                     Sa{j} = Sz{j};
