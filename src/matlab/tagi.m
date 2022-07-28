@@ -165,6 +165,9 @@
                     if net.split_v2_act && j == numLayers
                         [ma{j}(1:net.nl), Sa{j}(1:net.nl), J{j}(1:net.nl)] = act.meanVar(mz{j}(1:net.nl), mz{j}(1:net.nl), Sz{j}(1:net.nl),...
                         actFunIdx(j), actBound(j), B, rB, net.gpu);
+                        ma{j}(net.nl+1:end) = mz{j}(net.nl+1:end);
+                        Sa{j}(net.nl+1:end) = Sz{j}(net.nl+1:end);
+                        J{j}(net.nl+1:end)  = ones(size(mz{j}(net.nl+1:end)), 'like', mz{j}(net.nl+1:end));
                     else    
                         [ma{j}, Sa{j}, J{j}] = act.meanVar(mz{j}, mz{j}, Sz{j},...
                         actFunIdx(j), actBound(j), B, rB, net.gpu);
