@@ -135,6 +135,32 @@
                     fun     = @(x) (1 - x) .* x;
                     J       = arrayfun(fun, m);
                 end
+            elseif funIdx == 11 % neg relu
+                if gpu
+                    J = mz < 0;
+                    J   = cast(J, 'like', mz);
+                    m   = bsxfun(@times, z, J);
+                    J = J;
+                else
+                    m   = min(0, mz);
+                    J   = single(z < 0);
+                    J = J;
+                end
+            elseif funIdx == 12 % neg leaky relu
+                alpha = cast(0.2, 'like', mz);
+                if gpu                   
+                    idx = mz < 0;
+                    J   = cast(idx, 'like', mz);                   
+                    m   = bsxfun(@times, z, J);  
+                    J(~idx) = alpha;
+                    m(~idx) = alpha * z(~idx);
+                else
+                    idx = mz < 0;
+                    m   = min(0, mz);
+                    J   = single(z < 0);
+                    J(~idx) = alpha;
+                    m(~idx) = alpha * z(~idx);
+                end
             else
                 m = mz;
                 J = ones(size(mz), 'like', mz);
