@@ -1719,6 +1719,8 @@ classdef network
             numDataPerBatch = net.repBatchSize * net.batchSize;
             zl  = zeros(numObs, net.ny, net.dtype);
             Szl = zeros(numObs, net.ny, net.dtype);
+            B   = cast(net.batchSize, net.dtype);
+            rB  = cast(net.repBatchSize, net.dtype);
             % Loop
             loop = 0;
             for i = 1 : numDataPerBatch : numObs
@@ -1750,7 +1752,7 @@ classdef network
                         Syloop = [];
                     end
                     [states, normStat, maxIdx] = tagi.feedForwardPass(net,...
-                        theta, normStat, states, maxIdx); 
+                        theta, normStat, states, maxIdx);
                     [deltaM, deltaS,deltaMx, deltaSx,...
                         ~, ~, sv] = tagi.hiddenStateBackwardPass(net, theta,...
                         normStat, states, yloop, Syloop, [], maxIdx);
@@ -1765,12 +1767,8 @@ classdef network
                     [states, normStat, maxIdx] = tagi.feedForwardPass(net,...
                         theta, normStat, states, maxIdx); 
                     [~, ~, ma, Sa]   = tagi.extractStates(states);
-                    zl(idxBatch, :)  = gather(reshape(ma{end}, ...
-                        [net.ny, numDataPerBatch])');
-                    Szl(idxBatch, :) = gather(reshape(Sa{end}, ...
-                        [net.ny, numDataPerBatch])');
                     sv = net.sv;
-                end 
+                end
                 zl(idxBatch, :)  = gather(reshape(ma{end}, ...
                     [net.ny, numDataPerBatch])');
                 Szl(idxBatch, :) = gather(reshape(Sa{end}, ...
